@@ -603,6 +603,120 @@
         width: 100%;
       }
     }
+    .turn-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  z-index: 1500;
+  display: none;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.turn-indicator.show {
+  display: block;
+}
+
+.turn-player-name {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 16px;
+}
+
+.turn-message {
+  font-size: 1.2rem;
+  color: #718096;
+  margin-bottom: 24px;
+}
+
+.ready-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 16px 32px;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.ready-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
+.player.blurred {
+  filter: blur(8px);
+  pointer-events: none;
+  opacity: 0.5;
+  transition: all 0.3s ease;
+}
+
+.player.active {
+  filter: none;
+  pointer-events: all;
+  opacity: 1;
+  border-left-width: 6px;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+  transform: scale(1.02);
+  transition: all 0.3s ease;
+}
+
+.phase-indicator {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-weight: 600;
+  color: #4a5568;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  display: none;
+}
+
+.phase-indicator.show {
+  display: block;
+}
+
+.secret-reveal {
+  background: #f0fff4;
+  border: 2px solid #48bb78;
+  border-radius: 16px;
+  padding: 20px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.secret-title {
+  font-size: 1.1rem;
+  color: #2d5016;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.secret-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #22543d;
+  letter-spacing: 4px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
   </style>
 </head>
 <body>
@@ -673,15 +787,26 @@
       </div>
     </div>
   </div>
+  <div class="turn-indicator" id="turnIndicator">
+  <div class="turn-player-name" id="turnPlayerName"></div>
+  <div class="turn-message" id="turnMessage"></div>
+  <button class="ready-btn" onclick="startTurn()">พร้อมแล้ว!</button>
+</div>
 
+<div class="phase-indicator" id="phaseIndicator">
+  ระยะกำหนดเลขลับ
+</div>
   <script>
     let gameState = {
-      playerCount: 0,
-      playerNames: [],
-      gameMode: '', // 'vs' สำหรับ 2 คน, 'guess' สำหรับ 3-4 คน
-      targetNumber: '',
-      hasGuessed: []
-    };
+  playerCount: 0,
+  playerNames: [],
+  gameMode: '',
+  targetNumber: '',
+  hasGuessed: [],
+  currentTurn: 1, // เพิ่ม
+  gamePhase: 'setup', // 'setup', 'guessing' เพิ่ม
+  secrets: ['', ''] // เก็บเลขลับของแต่ละคน เพิ่ม
+};
 
     function selectPlayerCount(count) {
       gameState.playerCount = count;
@@ -772,24 +897,65 @@
     }
 
     function setupGameScreen() {
-      const subtitle = document.getElementById('gameSubtitle');
-      const targetSection = document.getElementById('targetNumberSection');
-      const gameContainer = document.getElementById('gameContainer');
-      
-      if (gameState.gameMode === 'vs') {
-        subtitle.textContent = `เกมเดาเลข 4 หลัก สำหรับ ${gameState.playerCount} คน - โหมดต่อสู้`;
-        targetSection.style.display = 'none';
-        gameContainer.className = 'game-container two-players';
-      } else {
-        subtitle.textContent = `เกมเดาเลข 4 หลัก สำหรับ ${gameState.playerCount} คน - เดาเลขลับ`;
-        targetSection.style.display = 'block';
-        document.getElementById('targetNumber').textContent = gameState.targetNumber;
-        gameContainer.className = `game-container ${gameState.playerCount === 3 ? 'three' : 'four'}-players`;
-      }
-      
-      generatePlayerCards();
-    }
+  const subtitle = document.getElementById('gameSubtitle');
+  const targetSection = document.getElementById('targetNumberSection');
+  const gameContainer = document.getElementById('gameContainer');
+  const phaseIndicator = document.getElementById('phaseIndicator');
+  
+  if (gameState.gameMode === 'vs') {
+    subtitle.textContent = `เกมเดาเลข 4 หลัก สำหรับ ${gameState.playerCount} คน - โหมดต่อสู้`;
+    targetSection.style.display = 'none';
+    gameContainer.className = 'game-container two-players';
+    phaseIndicator.classList.add('show');
+    gameState.gamePhase = 'setup';
+    gameState.currentTurn = 1;
+    
+    // ไม่เบลอในช่วงกำหนดเลข - ให้ทั้งสองคนเห็นหน้าจอตัวเอง
+    generatePlayerCards();
+    // ไม่เรียก showTurnIndicator() ในตอนนี้
+  } else {
+    subtitle.textContent = `เกมเดาเลข 4 หลัก สำหรับ ${gameState.playerCount} คน - เดาเลขลับ`;
+    targetSection.style.display = 'block';
+    document.getElementById('targetNumber').textContent = gameState.targetNumber;
+    gameContainer.className = `game-container ${gameState.playerCount === 3 ? 'three' : 'four'}-players`;
+    generatePlayerCards();
+  }
+}
+function showTurnIndicator() {
+  const indicator = document.getElementById('turnIndicator');
+  const playerName = document.getElementById('turnPlayerName');
+  const message = document.getElementById('turnMessage');
+  
+  if (gameState.gamePhase === 'setup') {
+    playerName.textContent = gameState.playerNames[gameState.currentTurn - 1];
+    message.textContent = 'ตาคุณกำหนดเลขลับ 4 หลัก';
+  } else {
+    playerName.textContent = gameState.playerNames[gameState.currentTurn - 1];
+    message.textContent = 'ตาคุณเดาเลข';
+  }
+  
+  indicator.classList.add('show');
+  updatePlayerVisibility();
+}
 
+function startTurn() {
+  const indicator = document.getElementById('turnIndicator');
+  indicator.classList.remove('show');
+  updatePlayerVisibility();
+}
+
+function updatePlayerVisibility() {
+  const players = document.querySelectorAll('.player');
+  players.forEach((player, index) => {
+    if (index + 1 === gameState.currentTurn) {
+      player.classList.remove('blurred');
+      player.classList.add('active');
+    } else {
+      player.classList.add('blurred');
+      player.classList.remove('active');
+    }
+  });
+}
     function generatePlayerCards() {
       const container = document.getElementById('gameContainer');
       container.innerHTML = '';
@@ -862,59 +1028,137 @@
     }
 
     function makeVSGuess(player) {
-      const secret1 = document.getElementById("secret1").value;
-      const secret2 = document.getElementById("secret2").value;
-
-      if (secret1.length !== 4 || secret2.length !== 4) {
-        showToast("กรุณาให้ทั้งสองฝ่ายกรอกเลขลับ 4 หลักก่อน!", "error");
-        return;
-      }
-
-      const guess = document.getElementById(`guess${player}`).value;
-      if (guess.length !== 4 || !/^\d+$/.test(guess)) {
-        showToast("กรอกเลข 4 หลักให้ถูกต้อง", "error");
-        return;
-      }
-
-      const target = player === 1 ? secret2 : secret1;
-      const result = checkGuess(guess, target);
-      const historyDiv = document.getElementById(`history${player}`);
+  if (gameState.gamePhase === 'setup') {
+    // ระยะกำหนดเลขลับ
+    const secret = document.getElementById(`secret${player}`).value;
+    if (secret.length !== 4 || !/^\d+$/.test(secret)) {
+      showToast("กรอกเลข 4 หลักให้ถูกต้อง", "error");
+      return;
+    }
+    
+    // ตรวจสอบไม่ให้มีเลขซ้ำ
+    const digits = secret.split('');
+    if (new Set(digits).size !== 4) {
+      showToast("เลขต้องไม่ซ้ำกัน", "error");
+      return;
+    }
+    
+    gameState.secrets[player - 1] = secret;
+    document.getElementById(`secret${player}`).disabled = true;
+    
+    // เปลี่ยนปุ่มเป็น "รอคู่แข่ง..."
+    const button = document.querySelector(`.player:nth-child(${player}) .guess-button`);
+    button.textContent = "รอคู่แข่ง...";
+    button.disabled = true;
+    button.style.opacity = "0.6";
+    
+    // ตรวจสอบว่าทั้งสองคนกำหนดเลขเสร็จแล้วหรือไม่
+    if (gameState.secrets[0] && gameState.secrets[1]) {
+      // ทั้งสองคนกำหนดเลขเสร็จแล้ว - เริ่มระยะเดาเลข
+      gameState.gamePhase = 'guessing';
+      gameState.currentTurn = 1;
+      document.getElementById('phaseIndicator').textContent = 'ระยะเดาเลข';
       
-      // ลบ empty state
-      if (!gameState.hasGuessed[player - 1]) {
-        historyDiv.innerHTML = '';
-        gameState.hasGuessed[player - 1] = true;
-      }
+      // ซ่อน input เลขลับ
+      document.querySelectorAll('[id^="secret"]').forEach(input => {
+        input.parentElement.style.display = 'none';
+      });
       
-      const entry = document.createElement("div");
-      entry.className = "history-item";
+      // เปลี่ยนปุ่มกลับเป็นปกติ
+      document.querySelectorAll('.guess-button').forEach((btn, index) => {
+        btn.textContent = "เดาเลย!";
+        btn.disabled = false;
+        btn.style.opacity = "1";
+      });
       
-      if (result.correctPosition === 4) {
-        entry.className += " win";
-        entry.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            🎯 <span class="guess-number">${guess}</span>
-            <span style="margin-left: auto;">🏆</span>
-          </div>
-          <div style="font-weight: 600;">ถูกทุกตัว! คุณชนะแล้ว!</div>
-        `;
-        showWinPopup(gameState.playerNames[player - 1]);
-      } else {
-        entry.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            🎯 <span class="guess-number">${guess}</span>
-          </div>
-          <div>
-            ถูกเลข <span class="result-correct">${result.correctNumber}</span> ตัว • 
-            ถูกตำแหน่ง <span class="result-position">${result.correctPosition}</span> ตัว
-          </div>
-        `;
-      }
-      
-      historyDiv.insertBefore(entry, historyDiv.firstChild);
-      document.getElementById(`guess${player}`).value = "";
+      // เริ่มเทิร์นแรก
+      showTurnIndicator();
+    }
+  } else {
+    // ระยะเดาเลข (เหมือนเดิม)
+    const guess = document.getElementById(`guess${player}`).value;
+    if (guess.length !== 4 || !/^\d+$/.test(guess)) {
+      showToast("กรอกเลข 4 หลักให้ถูกต้อง", "error");
+      return;
     }
 
+    const target = gameState.secrets[player === 1 ? 1 : 0]; // เดาเลขของอีกฝ่าย
+    const result = checkGuess(guess, target);
+    const historyDiv = document.getElementById(`history${player}`);
+    
+    // ลบ empty state
+    if (!gameState.hasGuessed[player - 1]) {
+      historyDiv.innerHTML = '';
+      gameState.hasGuessed[player - 1] = true;
+    }
+    
+    const entry = document.createElement("div");
+    entry.className = "history-item";
+    
+    if (result.correctPosition === 4) {
+      entry.className += " win";
+      entry.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+          🎯 <span class="guess-number">${guess}</span>
+          <span style="margin-left: auto;">🏆</span>
+        </div>
+        <div style="font-weight: 600;">ถูกทุกตัว! คุณชนะแล้ว!</div>
+      `;
+      showWinPopupWithSecrets(gameState.playerNames[player - 1]);
+    } else {
+      entry.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+          🎯 <span class="guess-number">${guess}</span>
+        </div>
+        <div>
+          ถูกเลข <span class="result-correct">${result.correctNumber}</span> ตัว • 
+          ถูกตำแหน่ง <span class="result-position">${result.correctPosition}</span> ตัว
+        </div>
+      `;
+      
+      // สลับเทิร์น
+      gameState.currentTurn = gameState.currentTurn === 1 ? 2 : 1;
+      setTimeout(() => {
+        showTurnIndicator();
+      }, 1000);
+    }
+    
+    historyDiv.insertBefore(entry, historyDiv.firstChild);
+    document.getElementById(`guess${player}`).value = "";
+  }
+}
+
+function showWinPopupWithSecrets(playerName) {
+  const popup = document.getElementById("winPopup");
+  const message = document.getElementById("winMessage");
+  
+  // ซ่อนตัวบ่งชี้เฟส
+  document.getElementById('phaseIndicator').classList.remove('show');
+  
+  // แสดงเลขลับของทั้งสองคน
+  const secretsHtml = `
+    <div class="secret-reveal">
+      <div class="secret-title">เลขลับของ ${gameState.playerNames[0]}</div>
+      <div class="secret-value">${gameState.secrets[0]}</div>
+    </div>
+    <div class="secret-reveal">
+      <div class="secret-title">เลขลับของ ${gameState.playerNames[1]}</div>
+      <div class="secret-value">${gameState.secrets[1]}</div>
+    </div>
+  `;
+  
+  message.innerHTML = `
+    <strong>${playerName}</strong> เป็นผู้ชนะ!<br>เก่งมากเลย! 👏
+    ${secretsHtml}
+  `;
+  
+  // แสดงทุกคนเพื่อให้เห็นเลขลับ
+  document.querySelectorAll('.player').forEach(player => {
+    player.classList.remove('blurred', 'active');
+  });
+  
+  popup.classList.add("show");
+}
     function makeTargetGuess(player) {
       const guess = document.getElementById(`guess${player}`).value;
       if (guess.length !== 4 || !/^\d+$/.test(guess)) {
@@ -1005,18 +1249,21 @@
     }
 
     function newGame() {
-      closeWinPopup();
-      goToPlayerCountScreen();
-      
-      // รีเซ็ตสถานะเกม
-      gameState = {
-        playerCount: 0,
-        playerNames: [],
-        gameMode: '',
-        targetNumber: '',
-        hasGuessed: []
-      };
-    }
+  closeWinPopup();
+  goToPlayerCountScreen();
+  
+  // รีเซ็ตสถานะเกม
+  gameState = {
+    playerCount: 0,
+    playerNames: [],
+    gameMode: '',
+    targetNumber: '',
+    hasGuessed: [],
+    currentTurn: 1,
+    gamePhase: 'setup',
+    secrets: ['', '']
+  };
+}
 
     function showScreen(screenId) {
       document.querySelectorAll('.screen').forEach(screen => {
